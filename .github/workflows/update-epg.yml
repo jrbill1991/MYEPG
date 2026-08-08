@@ -1,1 +1,47 @@
+name: Update clean EPG
 
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '25 6,18 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build merged clean EPG
+        run: python merge_epg.py
+
+      - name: Publish latest guide
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          mkdir -p /tmp/epg-publish
+          cp guide.xml.gz /tmp/epg-publish/guide.xml.gz
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout --orphan output
+          git rm -rf . || true
+          cp /tmp/epg-publish/guide.xml.gz ./guide.xml.gz
+
+          echo "# Generated EPG" > README.md
+
+          git add guide.xml.gz README.md
+          git commit -m "Update EPG"
+          git push --force origin output
