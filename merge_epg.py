@@ -36,7 +36,7 @@ WORK.mkdir(parents=True, exist_ok=True)
 # XMLTV commonly uses YYYYMMDDhhmmss +ZZZZ.
 # We preserve shorter valid timestamps unchanged, but normalize 14-digit
 # wall-clock overflow such as 00:60 -> 01:00.
-TS_RE = re.compile(r"^(\d{4,14})(?:\s+([+-]\d{4}))?$")
+TS_RE = re.compile(r"^(\d{4,14})(?:\s*([+-]\d{4}))?$")
 
 def download(url: str, dest: Path) -> None:
     print(f"Downloading {url}")
@@ -115,11 +115,22 @@ def clean_timestamp(value: str | None) -> str | None:
 
 def iter_tag(gz_path: Path, wanted: str):
     with gzip.open(gz_path, "rb") as f:
-        for event, elem in ET.iterparse(f, events=("end",)):
-            # Handle either plain XMLTV tags or a namespace, defensively.
+        inside_target = 0
+
+        for event, elem in ET.iterparse(f, events=("start", "end")):
             local = elem.tag.rsplit("}", 1)[-1]
-            if local == wanted:
-                yield elem
+
+            if event == "start":
+                if inside_target:
+                    inside_target += 1
+                elif local == wanted:
+                    inside_target = 1
+                continue
+
+            if inside_target:
+                inside_target -= 1
+                if inside_target == 0:
+                    yield elem
             else:
                 elem.clear()
 
